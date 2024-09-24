@@ -47,6 +47,7 @@ func main() {
 	cmds.register("users", handlerGetUsers)
 	cmds.register("agg", handlerAgg)
 	cmds.register("addfeed", handlerAddFeed)
+	cmds.register("feeds", handlerGetFeeds)
 
 	// Step 6: Check and parse command-line arguments
 	if len(os.Args) < 2 {
@@ -218,6 +219,28 @@ func handlerAddFeed(appState *state, cmd command) error {
 
 	fmt.Println(feedRecord)
 
+	return nil
+}
+
+func handlerGetFeeds(appState *state, cmd command) error {
+	if len(cmd.args) != 0 {
+		return fmt.Errorf("error: no args needed")
+	}
+
+	feeds, err := appState.db.GetFeeds(context.Background())
+	if err != nil {
+		return fmt.Errorf("error geting users from database")
+	}
+
+	for _, feed := range feeds {
+		userName, err := appState.db.GetUserName(context.Background(), feed.UserID)
+		if err != nil {
+			return fmt.Errorf("error matching UUIDs")
+		}
+		fmt.Printf("* %s\n", feed.Name)
+		fmt.Printf("* %s\n", feed.Url)
+		fmt.Printf("* %s\n", userName)
+	}
 	return nil
 }
 
