@@ -74,13 +74,13 @@ func (cfg *Config) SetUser(name string) error {
 
 // ===== Helper Functions =====
 
-const configFileName = "gatorconfig.json"
+const configFileName = ".gatorconfig.json"
 
 func getConfigFilePath() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("error finding user home directory: %w", err)
 	}
-	ConfigFilePath := homeDir + "/workspace/github.com/adamararcane/Gator/"
+	ConfigFilePath := homeDir + "/"
 	return ConfigFilePath, nil
 }
