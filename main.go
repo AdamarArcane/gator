@@ -48,6 +48,8 @@ func main() {
 	cmds.register("agg", handlerAgg)
 	cmds.register("addfeed", handlerAddFeed)
 	cmds.register("feeds", handlerGetFeeds)
+	cmds.register("follow", handlerFollow)
+	cmds.register("following", handlerFollowing)
 
 	// Step 6: Check and parse command-line arguments
 	if len(os.Args) < 2 {
@@ -217,6 +219,17 @@ func handlerAddFeed(appState *state, cmd command) error {
 		return fmt.Errorf("error creating feed")
 	}
 
+	feedFollowParams := database.CreateFeedFollowParams{
+		ID:     uuid.New(),
+		UserID: user.ID,
+		FeedID: feedID,
+	}
+
+	_, err = appState.db.CreateFeedFollow(context.Background(), feedFollowParams)
+	if err != nil {
+		return fmt.Errorf("error creating feed follow: %w", err)
+	}
+
 	fmt.Println(feedRecord)
 
 	return nil
@@ -242,6 +255,61 @@ func handlerGetFeeds(appState *state, cmd command) error {
 		fmt.Printf("* %s\n", userName)
 	}
 	return nil
+}
+
+func handlerFollow(appState *state, cmd command) error {
+	if len(cmd.args) < 1 {
+		return fmt.Errorf("error: url needed")
+	}
+
+	feed_follow_id := uuid.New()
+
+	feed, err := appState.db.GetFeed(context.Background(), cmd.args[0])
+	if err != nil {
+		return fmt.Errorf("error getting url feed id")
+	}
+
+	user, err := appState.db.GetUser(context.Background(), appState.cfg.Current_user_name)
+	if err != nil {
+		return fmt.Errorf("error getting current user uuid")
+	}
+
+	feedFollowParams := database.CreateFeedFollowParams{
+		ID:     feed_follow_id,
+		UserID: user.ID,
+		FeedID: feed.ID,
+	}
+
+	feedFollow, err := appState.db.CreateFeedFollow(context.Background(), feedFollowParams)
+	if err != nil {
+		return fmt.Errorf("error creating feed follow: %w", err)
+	}
+
+	fmt.Printf("%s followed %s\n", feedFollow[0].UserName, feedFollow[0].FeedName)
+	return nil
+}
+
+func handlerFollowing(appState *state, cmd command) error {
+	if len(cmd.args) != 0 {
+		return fmt.Errorf("error: no args needed")
+	}
+
+	user, err := appState.db.GetUser(context.Background(), appState.cfg.Current_user_name)
+	if err != nil {
+		return fmt.Errorf("error getting current user uuid")
+	}
+
+	userFollowing, err := appState.db.GetFeedFollowsForUser(context.Background(), user.ID)
+	if err != nil {
+		return fmt.Errorf("error getting users follwed feeds: %w", err)
+	}
+
+	for _, name := range userFollowing {
+		fmt.Printf("* %s\n", name.Name)
+	}
+
+	return nil
+
 }
 
 type commands struct {
