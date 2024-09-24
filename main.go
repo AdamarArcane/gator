@@ -40,6 +40,7 @@ func main() {
 	cmds.register("register", handlerRegister)
 	cmds.register("login", handlerLogin)
 	cmds.register("reset", handlerReset)
+	cmds.register("users", handlerGetUsers)
 
 	// Step 6: Check and parse command-line arguments
 	if len(os.Args) < 2 {
@@ -139,6 +140,28 @@ func handlerReset(appState *state, cmd command) error {
 	err := appState.db.ResetDatabase(context.Background())
 	if err != nil {
 		return fmt.Errorf("error reseting database")
+	}
+
+	return nil
+}
+
+func handlerGetUsers(appState *state, cmd command) error {
+	if len(cmd.args) != 0 {
+		return fmt.Errorf("error: no args needed")
+	}
+
+	users, err := appState.db.GetUsers(context.Background())
+	if err != nil {
+		return fmt.Errorf("error geting users from database")
+	}
+
+	for _, user := range users {
+		if user == appState.cfg.Current_user_name {
+			fmt.Printf("* %s (current)\n", user)
+		} else {
+			fmt.Printf("* %s\n", user)
+		}
+
 	}
 
 	return nil
