@@ -3,7 +3,11 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/xml"
 	"fmt"
+	"html"
+	"io"
+	"net/http"
 	"os"
 	"time"
 
@@ -41,6 +45,8 @@ func main() {
 	cmds.register("login", handlerLogin)
 	cmds.register("reset", handlerReset)
 	cmds.register("users", handlerGetUsers)
+	cmds.register("agg", handlerAgg)
+	cmds.register("addfeed", handlerAddFeed)
 
 	// Step 6: Check and parse command-line arguments
 	if len(os.Args) < 2 {
@@ -167,6 +173,54 @@ func handlerGetUsers(appState *state, cmd command) error {
 	return nil
 }
 
+func handlerAgg(appState *state, cmd command) error {
+	if len(cmd.args) != 0 {
+		return fmt.Errorf("error: no args needed")
+	}
+
+	feed, err := fetchFeed("https://www.wagslane.dev/index.xml")
+	if err != nil {
+		return fmt.Errorf("error fetching feed: %w", err)
+	}
+
+	fmt.Println(feed)
+
+	return nil
+
+}
+
+func handlerAddFeed(appState *state, cmd command) error {
+	// Step 1: Ensure a name argument was provided
+	if len(cmd.args) < 2 {
+		return fmt.Errorf("error: not enough arguments (2)")
+	}
+
+	feedName := cmd.args[0]
+	feedUrl := cmd.args[1]
+	feedID := uuid.New()
+	now := time.Now()
+	user, err := appState.db.GetUser(context.Background(), appState.cfg.Current_user_name)
+	if err != nil {
+		return fmt.Errorf("error getting current user uuid")
+	}
+
+	feedRecord, err := appState.db.CreateFeed(context.Background(), database.CreateFeedParams{
+		ID:        feedID,
+		CreatedAt: now,
+		UpdatedAt: now,
+		Name:      feedName,
+		Url:       feedUrl,
+		UserID:    user.ID,
+	})
+	if err != nil {
+		return fmt.Errorf("error creating feed")
+	}
+
+	fmt.Println(feedRecord)
+
+	return nil
+}
+
 type commands struct {
 	command map[string]func(*state, command) error
 }
@@ -180,4 +234,57 @@ func (c *commands) run(s *state, cmd command) error {
 		return handler(s, cmd)
 	}
 	return fmt.Errorf("command '%s' not found", cmd.name)
+}
+
+type RSSFeed struct {
+	Channel struct {
+		Title       string    `xml:"title"`
+		Link        string    `xml:"link"`
+		Description string    `xml:"description"`
+		Item        []RSSItem `xml:"item"`
+	} `xml:"channel"`
+}
+
+type RSSItem struct {
+	Title       string `xml:"title"`
+	Link        string `xml:"link"`
+	Description string `xml:"description"`
+	PubDate     string `xml:"pubDate"`
+}
+
+func fetchFeed(feedURL string) (*RSSFeed, error) {
+
+	var feed RSSFeed
+
+	req, err := http.NewRequest("GET", feedURL, nil)
+	if err != nil {
+		return &RSSFeed{}, fmt.Errorf("error creating request")
+	}
+	req.Header.Add("User-Agent", "Gator")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return &RSSFeed{}, fmt.Errorf("error getting rss feed")
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return &RSSFeed{}, fmt.Errorf("error reading response body")
+	}
+
+	err = xml.Unmarshal(body, &feed)
+	if err != nil {
+		return &RSSFeed{}, fmt.Errorf("error unmarshaling xml")
+	}
+
+	feed.Channel.Title = html.UnescapeString(feed.Channel.Title)
+	feed.Channel.Description = html.UnescapeString(feed.Channel.Description)
+
+	for i := range feed.Channel.Item {
+		feed.Channel.Item[i].Title = html.UnescapeString(feed.Channel.Item[i].Title)
+		feed.Channel.Item[i].Description = html.UnescapeString(feed.Channel.Item[i].Description)
+	}
+
+	return &feed, nil
+
 }
