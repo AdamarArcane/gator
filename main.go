@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"log"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/adamararcane/Gator/internal/config"
@@ -51,6 +54,7 @@ func main() {
 	cmds.register("follow", middlewareLoggedIn(handlerFollow))
 	cmds.register("following", middlewareLoggedIn(handlerFollowing))
 	cmds.register("unfollow", middlewareLoggedIn(handlerUnfollow))
+	cmds.register("browse", middlewareLoggedIn(handlerBrowse))
 
 	// Step 6: Check and parse command-line arguments
 	if len(os.Args) < 2 {
@@ -178,18 +182,21 @@ func handlerGetUsers(appState *state, cmd command) error {
 }
 
 func handlerAgg(appState *state, cmd command) error {
-	if len(cmd.args) != 0 {
-		return fmt.Errorf("error: no args needed")
+	if len(cmd.args) < 1 || len(cmd.args) > 2 {
+		return fmt.Errorf("error: input time duration (ex. 1s, 1m, 1hr)")
 	}
 
-	feed, err := fetchFeed("https://www.wagslane.dev/index.xml")
+	timeDur, err := time.ParseDuration(cmd.args[0])
 	if err != nil {
-		return fmt.Errorf("error fetching feed: %w", err)
+		return fmt.Errorf("error parsing time time duration (ex. 1s, 1m, 1hr): %w", err)
 	}
 
-	fmt.Println(feed)
+	fmt.Printf("Collecting feeds every %s...\n", timeDur)
 
-	return nil
+	ticker := time.NewTicker(timeDur)
+	for ; ; <-ticker.C {
+		scrapeFeeds(appState)
+	}
 
 }
 
@@ -326,6 +333,36 @@ func handlerUnfollow(appState *state, cmd command, user database.User) error {
 	return nil
 }
 
+func handlerBrowse(s *state, cmd command, user database.User) error {
+	limit := 2
+	if len(cmd.args) == 1 {
+		if specifiedLimit, err := strconv.Atoi(cmd.args[0]); err == nil {
+			limit = specifiedLimit
+		} else {
+			return fmt.Errorf("invalid limit: %w", err)
+		}
+	}
+
+	posts, err := s.db.GetPostsForUser(context.Background(), database.GetPostsForUserParams{
+		UserID: user.ID,
+		Limit:  int32(limit),
+	})
+	if err != nil {
+		return fmt.Errorf("couldn't get posts for user: %w", err)
+	}
+
+	fmt.Printf("Found %d posts for user %s:\n", len(posts), user.Name)
+	for _, post := range posts {
+		fmt.Printf("%s from %s\n", post.PublishedAt.Time.Format("Mon Jan 2"), post.FeedName)
+		fmt.Printf("--- %s ---\n", post.Title)
+		fmt.Printf("    %v\n", post.Description.String)
+		fmt.Printf("Link: %s\n", post.Url)
+		fmt.Println("=====================================")
+	}
+
+	return nil
+}
+
 // ===== Helper Functions =====
 
 func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) error) func(*state, command) error {
@@ -404,4 +441,55 @@ func fetchFeed(feedURL string) (*RSSFeed, error) {
 
 	return &feed, nil
 
+}
+
+func scrapeFeeds(appState *state) error {
+	nextFeed, err := appState.db.GetNextFeedToFetch(context.Background())
+	if err != nil {
+		return fmt.Errorf("error getting next feed: %w", err)
+	}
+
+	err = appState.db.MarkFeedFetched(context.Background(), nextFeed.ID)
+	if err != nil {
+		return fmt.Errorf("error marking feed as fetched: %w", err)
+	}
+
+	feedData, err := fetchFeed(nextFeed.Url)
+	if err != nil {
+		return fmt.Errorf("error fetching feed: %w", err)
+	}
+
+	for _, feedItem := range feedData.Channel.Item {
+		publishedAt := sql.NullTime{}
+		if t, err := time.Parse(time.RFC1123Z, feedItem.PubDate); err == nil {
+			publishedAt = sql.NullTime{
+				Time:  t,
+				Valid: true,
+			}
+		}
+		createPostParams := database.CreatePostParams{
+			ID:    uuid.New(),
+			Title: feedItem.Title,
+			Url:   feedItem.Link,
+			Description: sql.NullString{
+				String: feedItem.Description,
+				Valid:  true,
+			},
+			PublishedAt: publishedAt,
+			FeedID:      nextFeed.ID,
+		}
+
+		_, err = appState.db.CreatePost(context.Background(), createPostParams)
+		if err != nil {
+			if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+				continue
+			}
+			log.Printf("Couldn't create post: %v", err)
+			continue
+		}
+
+	}
+
+	log.Printf("Feed %s collected, %v posts found", nextFeed.Name, len(feedData.Channel.Item))
+	return nil
 }
