@@ -55,6 +55,7 @@ func main() {
 	cmds.register("following", middlewareLoggedIn(handlerFollowing))
 	cmds.register("unfollow", middlewareLoggedIn(handlerUnfollow))
 	cmds.register("browse", middlewareLoggedIn(handlerBrowse))
+	cmds.register("help", handlerHelp)
 
 	// Step 6: Check and parse command-line arguments
 	if len(os.Args) < 2 {
@@ -360,6 +361,31 @@ func handlerBrowse(s *state, cmd command, user database.User) error {
 		fmt.Println("=====================================")
 	}
 
+	return nil
+}
+
+func handlerHelp(s *state, cmd command) error {
+	descriptions := map[string]string{
+		"help":      "Show available commands",
+		"reset":     "Reset the application state",
+		"register":  "Register a new user and log them in",
+		"login":     "Log in as an existing user",
+		"users":     "List all users",
+		"addfeed":   "Add a new feed (requires login)",
+		"feeds":     "List all feeds",
+		"follow":    "Follow a feed (requires login)",
+		"following": "List feeds you are following (requires login)",
+		"unfollow":  "Unfollow a feed (requires login)",
+		"agg":       "Aggregate data",
+		"browse":    "Browse posts from your feeds (requires login)",
+	}
+
+	fmt.Println("Usage: Gator <command> <args>")
+	fmt.Println("================================")
+	fmt.Println("Available commands:")
+	for name, description := range descriptions {
+		fmt.Printf("  %-10s - %s\n", name, description)
+	}
 	return nil
 }
 
