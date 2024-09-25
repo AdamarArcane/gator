@@ -53,19 +53,6 @@ Edit the `.gatorconfig.json` file and add your database connection details:
 
 Gator uses [Goose](https://github.com/pressly/goose) for database migrations, and the migration files are included in the package.
 
-To set up the database schema, run the following command from the root directory of your project:
-```
-goose -dir schema postgres "postgres://username:password@localhost:5432/gatordb?sslmode=disable" up
-```
-* Ensure you replace the database URL with the one specified in your `.gatorconfig.json.`
-* The `schema` directory contains all the migration scripts.
-
-Alternatively, if you have included migration commands in your application, you can run:
-
-bash
-
-gator migrate up
-
 ## Running the Program
 
 After setting up the configuration and database, you can start using Gator.
