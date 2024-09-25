@@ -1,4 +1,4 @@
-module github.com/adamararcane/Gator
+module github.com/adamararcane/gator
 
 go 1.23.0
 

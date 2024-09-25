@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/adamararcane/Gator/internal/config"
-	"github.com/adamararcane/Gator/internal/database"
+	"github.com/adamararcane/gator/internal/config"
+	"github.com/adamararcane/gator/internal/database"
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
 )
@@ -156,6 +156,8 @@ func handlerReset(appState *state, cmd command) error {
 	if err != nil {
 		return fmt.Errorf("error reseting database")
 	}
+
+	fmt.Println("Gator has been reset")
 
 	return nil
 }
