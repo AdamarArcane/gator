@@ -42,7 +42,7 @@ touch ~/.gatorconfig.json
 Edit the `.gatorconfig.json` file and add your database connection details:
 ```
 {
-  "db_url": "postgres://postgres:postgres@localhost:5432/gator?sslmode=disable",
+  "db_url": "postgres://username:password@localhost:5432/gator?sslmode=disable",
   "current_user_name": "john"
 }
 ```
